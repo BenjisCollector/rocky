@@ -365,6 +365,28 @@ class Windows:
             max(r.bottom for r in rects),
         )
 
+    def beep(self) -> None:
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command", "[console]::beep(880,120)"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def speak(self, text: str) -> None:
+        """SAPI through PowerShell, in the background."""
+        if not text:
+            return
+        safe = text.replace("'", "''")
+        script = (
+            "Add-Type -AssemblyName System.Speech; "
+            f"(New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{safe}')"
+        )
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-Command", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
     def focused_role(self) -> str:
         """ControlTypeName of the focused control, with "Password" appended when UIA marks it as one."""
         _need_auto()

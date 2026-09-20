@@ -46,6 +46,20 @@ def execute(
     if kind == "search":
         platform.open_url(ENGINES[a["engine"]].format(q=quote_plus(a["query"])))
         return f"Searching {a['engine']} for {a['query']}."
+    if kind == "play":
+        from .media import youtube_first
+
+        url = youtube_first(a["query"])
+        if not url:
+            platform.open_url(ENGINES["youtube"].format(q=quote_plus(a["query"])))
+            return f"I could not pick a video, so here are the results for {a['query']}."
+        platform.open_url(url)
+        return f"Playing {a['query']}."
+    if kind == "fun":
+        from . import events
+
+        events.emit(a["op"])
+        return "" if a["op"] == "wave" else "Let's go!"
     front = plan.raw.get("front")
     if kind in INPUT_KINDS and front and platform.frontmost_app() != front:
         return (

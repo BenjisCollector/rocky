@@ -77,5 +77,11 @@ class Fake:
     def focused_role(self):
         return getattr(self, "focused", "")
 
+    def speak(self, text):
+        self._rec("speak", text)
+
+    def beep(self):
+        self._rec("beep")
+
     def check_permissions(self):
         return {"accessibility": True, "microphone": True, "input_monitoring": True}

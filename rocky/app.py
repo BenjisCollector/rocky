@@ -463,19 +463,12 @@ if sys.platform == "darwin":
 
         @objc.python_method
         def runUtterance(self, text: str) -> tuple[str, str]:
-            from .fast import execute
-            from .router import route, split_compound
+            from .brain import act
 
-            plan = route(self.jev, self.platform, text)
-            line = plan_line(plan)
-            parts = split_compound(text) if plan.compound else [text]
-            if len(parts) == 1:
-                return execute(plan, self.platform, self.act, jev=self.jev, prompt_fn=self.confirm), line
-            replies = []
-            for part in parts:
-                sub = route(self.jev, self.platform, part)
-                replies.append(execute(sub, self.platform, self.act, jev=self.jev, prompt_fn=self.confirm))
-            return " ".join(r for r in replies if r), line
+            reply, line = act(
+                text, self.jev, self.platform, self.act, prompt_fn=self.confirm, log=lambda _: None
+            )
+            return reply, line
 
         @objc.python_method
         def confirm(self, prompt: str) -> str:

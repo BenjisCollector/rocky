@@ -14,6 +14,8 @@ KINDS: dict[str, str] = {
     "open_app": "Launch, open, or switch to an installed application ('open photo booth', 'switch to safari')",
     "open_url": "Go to a website by name or address with no search query ('go to youtube', 'open github.com')",
     "search": "Search the web or a site for something: google it, look it up, search youtube for",
+    "play": "Play a specific video, song, or artist by name ('play lofi beats', 'play the Hormozi interview on youtube')",
+    "fun": "Ask Rocky itself to do something playful: dance, wave, say hi, celebrate",
     "shortcut": "Press one key or keyboard shortcut: copy, paste, undo, save, close the window",
     "scroll": "Scroll the current page or document up or down",
     "volume": "Change the system volume: louder, quieter, mute, unmute",
@@ -29,7 +31,19 @@ KINDS: dict[str, str] = {
 
 # Kinds the platform completes blind; needs_screen from the model is ignored for these.
 NO_SCREEN_KINDS = frozenset(
-    {"open_app", "open_url", "search", "shortcut", "scroll", "volume", "media", "system", "none"}
+    {
+        "open_app",
+        "open_url",
+        "search",
+        "play",
+        "fun",
+        "shortcut",
+        "scroll",
+        "volume",
+        "media",
+        "system",
+        "none",
+    }
 )
 
 SITES: dict[str, str] = {
@@ -88,7 +102,7 @@ _PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     (
         "search",
         re.compile(
-            r"^" + _VERBS + r"(?:search|google|look\s*up|find|look\s+for|show\s+me|pull\s+up)"
+            r"^" + _VERBS + r"(?:search|google|look\s*up|find|look\s+for|show\s+me|pull\s+up|play|put\s+on)"
             r"(?:\s+(?:on|in)\s+\w+(?:\s+\w+)?)?(?:\s+for)?[:,]?\s+(?P<t>.+)$",
             re.IGNORECASE,
         ),
@@ -251,6 +265,25 @@ def route(jev: Jev, platform: Platform, utterance: str) -> Plan:
     return to_plan(utterance, answers, questions, cands, domain, jev.latency_ms, front)
 
 
+_PLAY_NOISE = re.compile(
+    r"^(?:(?:please|can you|could you)\s+)?(?:find|search for|look for|look up|put on|play|watch)\s+"
+    r"|\s+(?:on|from|in)\s+youtube\b|\s*(?:,|\band\b)?\s*(?:play|watch|start)\s+(?:it|that|this)(?:\s+for\s+me)?\s*"
+    r"|\s+for\s+me\s*$|\s*please\s*$|\s+video\s*$",
+    re.IGNORECASE,
+)
+
+
+def clean_play_query(text: str) -> str:
+    """'find the hormozi interview on youtube and play it for me' -> 'the hormozi interview'."""
+    out = text
+    for _ in range(4):
+        new = _PLAY_NOISE.sub(" ", out)
+        if new == out:
+            break
+        out = new
+    return " ".join(out.split()).strip(" ,.") or text
+
+
 def to_plan(
     utterance: str,
     answers: dict[str, Any],
@@ -283,6 +316,12 @@ def to_plan(
         args["query"] = cands[tkey]
         args["engine"], _ = pick("engine")
         conf = min(conf, c)
+    elif kind == "play":
+        tkey, c = pick("text")
+        args["query"] = clean_play_query(cands[tkey])
+        conf = min(conf, c)
+    elif kind == "fun":
+        args["op"] = "dance" if re.search(r"danc|party|celebrat|boogie", utterance, re.IGNORECASE) else "wave"
     elif kind == "type":
         tkey, c = pick("text")
         args["text"] = cands[tkey]

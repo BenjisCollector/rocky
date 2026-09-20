@@ -12,6 +12,7 @@ both MIT; see THIRD_PARTY_NOTICES.md.
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import tempfile
 import time
@@ -507,6 +508,20 @@ class MacOS:
         subprocess.run(["screencapture", "-x", str(out)], check=True, capture_output=True)
         return out
 
+    def beep(self) -> None:
+        subprocess.Popen(
+            ["afplay", "-v", "0.6", "/System/Library/Sounds/Tink.aiff"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    def speak(self, text: str) -> None:
+        """System voice, in the background, one utterance at a time (a new one cuts the previous)."""
+        if not text:
+            return
+        subprocess.run(["pkill", "-x", "say"], capture_output=True, check=False)
+        subprocess.Popen(["say", "-r", "195", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     def focused_role(self) -> str:
         """Role of the focused element in the frontmost app. Secure fields are never listed by snapshot(),
         so this is how a caller learns that a password box has focus."""
@@ -520,6 +535,12 @@ class MacOS:
         pid = self._frontmost_pid()
         app = AS.AXUIElementCreateApplication(pid)
         AS.AXUIElementSetMessagingTimeout(app, AX_MESSAGE_TIMEOUT)
+        for flag in (
+            "AXEnhancedUserInterface",
+            "AXManualAccessibility",
+        ):  # browsers hide web content until asked
+            with contextlib.suppress(Exception):  # apps without the attribute raise; that is fine
+                AS.AXUIElementSetAttributeValue(app, flag, True)
         window = _ax(app, "AXFocusedWindow") or _ax(app, "AXMainWindow")
         if window is None:
             windows = _ax(app, "AXWindows") or []

@@ -58,12 +58,24 @@ def _pose(state: str, t: float, since: float) -> dict:
         pose["glow"] = 0.6 * abs(math.sin(t * 6.0))
         pose["glow_rgb"] = GLOW_ERR
         pose["bob"] = -1.0
+    elif state == "dance":
+        beat = t * 8.0
+        pose["bob"] = 6.0 * abs(math.sin(beat))
+        pose["arm"] = 40.0 + 45.0 * math.sin(beat)  # arms pump on the beat
+        pose["arm_left"] = -40.0 - 45.0 * math.sin(beat)
+        pose["tilt"] = 12.0 * math.sin(beat / 2)
+        pose["glow"] = 0.5 + 0.4 * abs(math.sin(beat))
+        pose["glow_rgb"] = GLOW if int(beat / math.pi) % 2 == 0 else (1.0, 0.55, 0.85)
+    elif state == "wave":
+        pose["arm"] = 55.0 + 28.0 * math.sin(t * 9.0)
+        pose["glow"] = 0.3
     return pose
 
 
 if sys.platform == "darwin":
     import objc
     from AppKit import (
+        NSAffineTransform,
         NSApplication,
         NSApplicationActivationPolicyAccessory,
         NSBackingStoreBuffered,
@@ -115,9 +127,18 @@ if sys.platform == "darwin":
             since = now - self.state_since
             if self.state == "done" and since > 1.4:
                 self.setState_("idle")
+            if self.state in ("dance", "wave") and since > (6.0 if self.state == "dance" else 2.0):
+                self.setState_("idle")
             pose = _pose(self.state, t, since)
             st = self.state
 
+            tilt = pose.get("tilt", 0.0)
+            if tilt:
+                xf = NSAffineTransform.transform()
+                xf.translateXBy_yBy_(W / 2, H / 2)
+                xf.rotateByDegrees_(tilt)
+                xf.translateXBy_yBy_(-W / 2, -H / 2)
+                xf.concat()
             cx, cy = W / 2, H / 2 + pose["bob"]
             s = pose["scale"]
             R = 44 * s  # slice radius
@@ -164,7 +185,7 @@ if sys.platform == "darwin":
                 _rgb(RIND_PALE).set()
                 hand.fill()
 
-            arm(-1, -50.0)
+            arm(-1, pose.get("arm_left", -50.0))
             arm(1, pose["arm"])
 
             # the slice: rind, pale band, flesh
@@ -344,6 +365,7 @@ def _demo() -> None:
         ("thinking", 2.0),
         ("speaking", 2.0),
         ("done", 1.6),
+        ("dance", 4.0),
         ("error", 1.5),
     ]
     for _ in range(5):

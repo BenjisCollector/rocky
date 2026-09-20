@@ -32,7 +32,9 @@ class Platform(Protocol):
 
     # --- perception (goal path) ---
     def snapshot(self, max_items: int = 120) -> Snapshot: ...
-    def focused_role(self) -> str: ...  # role of the focused UI element, e.g. "AXSecureTextField", "" if none
+    def focused_role(self) -> str: ...
+    def speak(self, text: str) -> None: ...  # non-blocking text to speech
+    def beep(self) -> None: ...  # short confirmation sound after a task, non-blocking
     def screenshot(self, path: Path | None = None) -> Path: ...
 
     # --- shortcuts vocabulary the router may offer, e.g. {"copy": ("c", ["cmd"])} ---

@@ -45,7 +45,7 @@ from typing import Self
 
 import numpy as np
 
-from . import events
+from . import events, history
 
 SAMPLE_RATE = 16000
 FRAME_MS = 30
@@ -555,6 +555,7 @@ def listen_forever(
                 continue
             _report(text, pcm, stt_ms)
             addressed, cmd = strip_wake(text, wake_word) if wake_word else (False, text)
+            history.record("heard", text=text, addressed=addressed, forced=forced, stt_ms=stt_ms)
             if addressed and not cmd and not forced:  # just the name: the next utterance is the command
                 events.emit("idle")
                 continue

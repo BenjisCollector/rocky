@@ -26,35 +26,14 @@ def describe(plan: Plan) -> str:
 
 
 def handle(jev: Any, platform: Any, utterance: str, act: bool, dry: bool, depth: int = 0) -> None:
-    from .fast import execute
-    from .jev import JevError
-    from .router import route, split_compound
+    from .brain import act as run
 
-    try:
-        plan = route(jev, platform, utterance)
-    except JevError as e:
-        print(f"  ! {e}")
-        return
-    print(describe(plan))
-    if plan.compound and depth == 0:
-        parts = split_compound(utterance)
-        if len(parts) > 1:
-            print(f"  compound: {parts}")
-            for part in parts:
-                handle(jev, platform, part, act, dry, depth=1)
-            return
-    if dry:
-        return
-    from . import events
+    run(utterance, jev, platform, act, dry=dry, speak=not args_text_mode(), depth=depth)
 
-    try:
-        reply = execute(plan, platform, act, jev=jev)
-        events.emit("done" if plan.kind != "none" else "idle")
-    except Exception as e:  # noqa: BLE001  one bad action must not kill voice mode
-        reply = f"That failed: {e}"
-        events.emit("error")
-    if reply:
-        print(f"  {reply}")
+
+def args_text_mode() -> bool:
+    """`rocky --text` prints only; voice mode also speaks."""
+    return "--text" in sys.argv
 
 
 def doctor() -> int:
