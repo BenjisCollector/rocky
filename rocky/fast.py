@@ -1,0 +1,89 @@
+"""Execute a Plan. Fast kinds map straight onto Platform calls; goal-tier plans hand off to the loop."""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+from urllib.parse import quote_plus
+
+from . import config, risk
+from .models import Plan
+from .platform.base import Platform
+from .router import ENGINES
+
+
+def execute(
+    plan: Plan,
+    platform: Platform,
+    act: bool = True,
+    *,
+    jev: Any = None,
+    prompt_fn: Callable[[str], str] = input,
+) -> str:
+    """Run the plan and return one spoken line ('' when there is nothing to say). The fast path always
+    acts; `act` only decides whether the goal loop drives the machine or dry-runs."""
+    if plan.kind == "none" or not plan.addressed:
+        return ""
+    if plan.confidence < config.ACTION_MIN_CONFIDENCE:
+        return "Not sure what you meant."
+    refusal = risk.check(plan, plan.confidence, prompt_fn)
+    if refusal:
+        return refusal
+    if plan.tier == "goal":
+        return _goal(plan, platform, act, jev)
+    a = plan.args
+    kind = plan.kind
+    if kind == "open_app":
+        if a["app"] == "none":
+            return "I don't see that app."
+        platform.open_app(a["app"])
+        return f"Opening {a['app']}."
+    if kind == "open_url":
+        platform.open_url(a["url"])
+        return f"Opening {a['site'].replace('_', ' ')}."
+    if kind == "search":
+        platform.open_url(ENGINES[a["engine"]].format(q=quote_plus(a["query"])))
+        return f"Searching {a['engine']} for {a['query']}."
+    if kind == "type":
+        return _type(a["text"], platform)
+    if kind == "shortcut":
+        if a["shortcut"] == "none":
+            return "I don't know that shortcut."
+        key, mods = platform.shortcuts()[a["shortcut"]]
+        platform.press(key, mods)
+        return a["shortcut"].replace("_", " ").capitalize() + "."
+    if kind == "scroll":
+        platform.scroll(a["op"])
+        return ""
+    if kind == "volume":
+        return platform.volume(a["op"])
+    if kind == "media":
+        platform.media(a["op"])
+        return ""
+    if kind == "system":
+        return platform.system(a["op"])
+    return ""
+
+
+def _type(text: str, platform: Platform) -> str:
+    """Type into whatever is focused, unless that field or the request itself is about a secret."""
+    if risk.is_secret_field(text):
+        return "I never type passwords or card details."
+    # ponytail: a full snapshot per fast type; add a platform.focused_item() when this measures slow.
+    focused = next((i for i in platform.snapshot().items if i.focused), None)
+    if focused and risk.is_secret_field(focused.label):
+        return "I never type into password or card fields."
+    platform.type_text(text)
+    return "Done."
+
+
+def _goal(plan: Plan, platform: Platform, act: bool, jev: Any) -> str:
+    from .loop import run_goal  # lazy: the loop is a separate module with its own dependencies
+
+    if jev is None:
+        from .jev import Jev
+
+        jev = Jev()
+    state = run_goal(platform, jev, plan.args["goal"], act, print)
+    n = len(state.steps)
+    return f"{state.outcome.capitalize()} after {n} step{'s' if n != 1 else ''}."
