@@ -83,6 +83,7 @@ if sys.platform == "darwin":
         NSImageScaleProportionallyDown,
         NSImageSymbolConfiguration,
         NSImageView,
+        NSIntersectsRect,
         NSLineBreakByTruncatingTail,
         NSMakeRect,
         NSMenu,
@@ -98,7 +99,6 @@ if sys.platform == "darwin":
         NSTextField,
         NSThread,
         NSTimer,
-        NSUserDefaults,
         NSVariableStatusItemLength,
         NSView,
         NSVisualEffectBlendingModeBehindWindow,
@@ -422,10 +422,7 @@ if sys.platform == "darwin":
             self.platform = get_platform()
             self.jev = Jev()
             self.overlay.show()
-            defaults = NSUserDefaults.standardUserDefaults()
-            if not defaults.boolForKey_("RockyDidLaunch"):
-                defaults.setBool_forKey_(True, "RockyDidLaunch")
-                self.showPanel_(None)
+            self.showPanel_(None)  # every launch: a full menu bar can hide the status item entirely
             if voice:
                 threading.Thread(target=self.voiceLoop, daemon=True, name="rocky-voice").start()
             else:
@@ -553,6 +550,10 @@ if sys.platform == "darwin":
 
         def showPanel_(self, sender):
             self.refreshPermissions_(None)
+            frame = self.panel.frame()
+            on_screen = any(NSIntersectsRect(frame, screen.frame()) for screen in NSScreen.screens())
+            if not on_screen:  # a frame remembered from a display that is no longer connected
+                self.panel.center()
             self.panel.orderFrontRegardless()
 
         def listenToggled_(self, sender):
