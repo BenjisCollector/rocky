@@ -507,6 +507,14 @@ class MacOS:
         subprocess.run(["screencapture", "-x", str(out)], check=True, capture_output=True)
         return out
 
+    def focused_role(self) -> str:
+        """Role of the focused element in the frontmost app. Secure fields are never listed by snapshot(),
+        so this is how a caller learns that a password box has focus."""
+        app = AS.AXUIElementCreateApplication(self._frontmost_pid())
+        AS.AXUIElementSetMessagingTimeout(app, AX_MESSAGE_TIMEOUT)
+        focused = _ax(app, "AXFocusedUIElement")
+        return _ax_str(focused, "AXRole") if focused is not None else ""
+
     def snapshot(self, max_items: int = 120) -> Snapshot:
         t0 = time.perf_counter()
         pid = self._frontmost_pid()

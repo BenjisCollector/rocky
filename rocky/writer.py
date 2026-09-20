@@ -89,4 +89,6 @@ def parse(content: str) -> str:
     if not isinstance(data, dict) or set(data) != {"text"} or not isinstance(data["text"], str):
         return ""
     text = data["text"].strip()
+    if any(ord(c) < 32 for c in text):  # a newline or tab would be typed as Return or Tab
+        return ""
     return text if 0 < len(text) <= MAX_CHARS else ""

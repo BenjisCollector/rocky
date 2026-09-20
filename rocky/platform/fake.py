@@ -74,5 +74,8 @@ class Fake:
             "close_window": ("w", ["cmd"]),
         }
 
+    def focused_role(self):
+        return getattr(self, "focused", "")
+
     def check_permissions(self):
         return {"accessibility": True, "microphone": True, "input_monitoring": True}

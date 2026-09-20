@@ -240,14 +240,15 @@ def route(jev: Jev, platform: Platform, utterance: str) -> Plan:
     cands = text_candidates(utterance)
     domain = domain_guess(utterance)
     questions = build_questions(apps, shortcuts, cands, domain)
+    front = platform.frontmost_app()
     state = {
         "utterance": utterance,
-        "frontmost_app": platform.frontmost_app(),
+        "frontmost_app": front,
         "apps": apps,
         "candidates": cands,
     }
     answers = jev.ask(state, questions)
-    return to_plan(utterance, answers, questions, cands, domain, jev.latency_ms)
+    return to_plan(utterance, answers, questions, cands, domain, jev.latency_ms, front)
 
 
 def to_plan(
@@ -257,6 +258,7 @@ def to_plan(
     cands: dict[str, str],
     domain: str,
     latency_ms: int,
+    front: str = "",
 ) -> Plan:
     def pick(name: str) -> tuple[str, float]:
         a = validate_choice(answers[name], questions[name]["criteria"])
@@ -300,7 +302,7 @@ def to_plan(
         addressed=noul(answers["addressed"]) > 0.5,
         compound=noul(answers["compound"]) > 0.5,
         latency_ms=latency_ms,
-        raw=answers,
+        raw={**answers, "front": front},
     )
 
 

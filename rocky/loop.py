@@ -52,7 +52,7 @@ def run_goal(
 ) -> RunState:
     """Drive `goal` to one of: done, nothing helps, low confidence, stalled, step limit, dry run,
     needs confirmation. With act=False nothing touches the machine."""
-    from .risk import is_secret_field, requires_confirmation
+    from .risk import is_secret_field, is_secret_role, requires_confirmation
 
     limit = max_steps or config.MAX_STEPS
     run_dir = config.RUNS_DIR / datetime.now().astimezone().strftime("%Y%m%d-%H%M%S-%f")
@@ -91,6 +91,7 @@ def run_goal(
                 log(f"would do: {what}")
                 state.outcome = "dry run"
                 return state
+            decision.raw["buttons"] = " | ".join(i.label for i in items if "button" in i.role.lower())
             if requires_confirmation(decision) and not (confirm and confirm(what)):
                 log(f"needs confirmation: {what}")
                 state.outcome = "needs confirmation"
@@ -98,7 +99,14 @@ def run_goal(
 
             platform.screenshot(run_dir / f"step-{n:03d}.png")
             t2 = time.perf_counter()
-            if decision.kind == "type_text" and is_secret_field(decision.item.label):
+            front = platform.frontmost_app()
+            if front != snapshot.app:
+                result.note = (
+                    f"refused: focus moved to {front}"  # the snapshot no longer describes the screen
+                )
+            elif decision.kind == "type_text" and (
+                is_secret_field(decision.item.label) or is_secret_role(platform.focused_role())
+            ):
                 result.note = "refused: secret field"
             else:
                 result.executed = True

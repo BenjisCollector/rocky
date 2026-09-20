@@ -365,6 +365,18 @@ class Windows:
             max(r.bottom for r in rects),
         )
 
+    def focused_role(self) -> str:
+        """ControlTypeName of the focused control, with "Password" appended when UIA marks it as one."""
+        _need_auto()
+        try:
+            control = auto.GetFocusedControl()
+        except Exception:  # noqa: BLE001  UIA raises COM errors when focus is in flux
+            return ""
+        if control is None:
+            return ""
+        role = getattr(control, "ControlTypeName", "") or ""
+        return role + " Password" if getattr(control, "IsPassword", False) else role
+
     def snapshot(self, max_items: int = 120) -> Snapshot:
         _need_auto()
         t0 = time.perf_counter()

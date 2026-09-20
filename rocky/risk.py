@@ -12,7 +12,8 @@ DESTRUCTIVE_SYSTEM_OPS = frozenset({"lock", "sleep", "sleep_display", "shutdown"
 _DESTRUCTIVE_SHORTCUT = re.compile(r"delete|send|trash|quit|force", re.IGNORECASE)
 _DESTRUCTIVE_WORDS = re.compile(
     r"\b(?:delete|remove|erase|discard|trash|empty|pay|buy|purchase|order|checkout|send|submit|transfer|"
-    r"wipe|format|uninstall|unsubscribe|cancel|shutdown|shut down|restart|reboot)\b",
+    r"wipe|format|uninstall|unsubscribe|cancel|shutdown|shut down|restart|reboot|"
+    r"move to bin|move to trash|confirm|clear|publish|post|approve|sign)\b",
     re.IGNORECASE,
 )
 _SECRET = re.compile(
@@ -27,6 +28,14 @@ YES = frozenset({"yes", "confirm"})
 def is_secret_field(label: str | None) -> bool:
     """True when a field label suggests a password, PIN, or payment card. Nothing is ever typed there."""
     return bool(label and _SECRET.search(label))
+
+
+_SECRET_ROLES = re.compile(r"secure|password", re.IGNORECASE)
+
+
+def is_secret_role(role: str | None) -> bool:
+    """True for AXSecureTextField on macOS or a UIA control flagged IsPassword on Windows."""
+    return bool(role and _SECRET_ROLES.search(role))
 
 
 def classify(action: Plan | Decision | str) -> str:
@@ -47,6 +56,8 @@ def classify(action: Plan | Decision | str) -> str:
             return "destructive"
         if action.kind == "type_text" and is_secret_field(label):
             return "destructive"
+        if action.kind == "press_enter" and _DESTRUCTIVE_WORDS.search(action.raw.get("buttons", "")):
+            return "destructive"  # Return fires the default button, so the visible buttons decide
         return "reversible"
     return "destructive" if _DESTRUCTIVE_WORDS.search(action) else "reversible"
 

@@ -11,6 +11,8 @@ from .models import Plan
 from .platform.base import Platform
 from .router import ENGINES
 
+INPUT_KINDS = frozenset({"type", "shortcut", "scroll"})  # keystrokes and wheel go to whatever is in front
+
 
 def execute(
     plan: Plan,
@@ -44,6 +46,11 @@ def execute(
     if kind == "search":
         platform.open_url(ENGINES[a["engine"]].format(q=quote_plus(a["query"])))
         return f"Searching {a['engine']} for {a['query']}."
+    front = plan.raw.get("front")
+    if kind in INPUT_KINDS and front and platform.frontmost_app() != front:
+        return (
+            f"Focus moved to {platform.frontmost_app()}. Nothing sent."  # the Teams-window class of incident
+        )
     if kind == "type":
         return _type(a["text"], platform)
     if kind == "shortcut":
@@ -70,6 +77,8 @@ def _type(text: str, platform: Platform) -> str:
     if risk.is_secret_field(text):
         return "I never type passwords or card details."
     # ponytail: a full snapshot per fast type; add a platform.focused_item() when this measures slow.
+    if risk.is_secret_role(platform.focused_role()):
+        return "I never type into password or card fields."
     focused = next((i for i in platform.snapshot().items if i.focused), None)
     if focused and risk.is_secret_field(focused.label):
         return "I never type into password or card fields."
