@@ -45,10 +45,14 @@ def handle(jev: Any, platform: Any, utterance: str, act: bool, dry: bool, depth:
             return
     if dry:
         return
+    from . import events
+
     try:
         reply = execute(plan, platform, act, jev=jev)
+        events.emit("done" if plan.kind != "none" else "idle")
     except Exception as e:  # noqa: BLE001  one bad action must not kill voice mode
         reply = f"That failed: {e}"
+        events.emit("error")
     if reply:
         print(f"  {reply}")
 
@@ -92,14 +96,18 @@ def main(argv: list[str] | None = None) -> int:
         handle(jev, platform, args.text, args.act, args.dry)
         return 0
 
+    from .overlay import run_with_overlay  # lazy: AppKit
     from .voice import listen_forever  # lazy: audio stack
 
-    listen_forever(
-        lambda utterance: handle(jev, platform, utterance, args.act, args.dry),
-        wake_word=config.WAKE_WORD,
-        backend=config.STT_BACKEND,
-        language=config.STT_LANGUAGE,
-    )
+    def listen() -> None:
+        listen_forever(
+            lambda utterance: handle(jev, platform, utterance, args.act, args.dry),
+            wake_word=config.WAKE_WORD,
+            backend=config.STT_BACKEND,
+            language=config.STT_LANGUAGE,
+        )
+
+    run_with_overlay(listen)  # the watermelon at the top of the screen; voice runs on a thread
     return 0
 
 
