@@ -18,7 +18,7 @@ TEXT_MODEL_API_KEY = os.environ.get("TEXT_MODEL_API_KEY", "")
 TEXT_MODEL_BASE_URL = os.environ.get("TEXT_MODEL_BASE_URL", "https://api.deepseek.com/v1")
 TEXT_MODEL = os.environ.get("TEXT_MODEL", "deepseek-chat")
 
-WAKE_WORD = os.environ.get("WAKE_WORD", "rocky").lower()
+WAKE_WORD = os.environ.get("WAKE_WORD", "watermelon").lower()
 STT_BACKEND = os.environ.get("STT_BACKEND", "auto")
 STT_LANGUAGE = os.environ.get("STT_LANGUAGE", "en-US")
 
