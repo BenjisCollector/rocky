@@ -127,10 +127,13 @@ class Gate:
 
     FOLLOW_UP_S = 8.0
     REMEMBER_S = 25.0
+    REPEAT_S = 15.0
 
     def __init__(self) -> None:
         self.said: list[tuple[float, str]] = []
         self.follow_up_until = 0.0
+        self.last_cmd = ""
+        self.last_cmd_at = 0.0
 
     def on_event(self, state: str) -> None:
         if state.startswith("said:"):
@@ -143,9 +146,10 @@ class Gate:
         text = _norm(heard)
         removed = False
         now = time.monotonic()
-        for ts, said in self.said:
-            if now - ts > self.REMEMBER_S or not said or not text:
-                continue
+        recent = [said for ts, said in self.said if now - ts <= self.REMEMBER_S and said]
+        for said in recent:
+            if not text:
+                break
             if said in text:
                 text = " ".join(text.replace(said, " ").split())
                 removed = True
@@ -154,11 +158,27 @@ class Gate:
             if m.size >= max(10, int(0.6 * len(said))):  # a long run of Rocky's words inside the transcript
                 text = " ".join((text[: m.a] + " " + text[m.a + m.size :]).split())
                 removed = True
+        if text and not STOP_WORDS.match(text):
+            for said in recent:  # "open notes" heard back from "opening notes": same sentence, blurred by STT
+                if difflib.SequenceMatcher(None, text, said).ratio() > 0.6:
+                    return "", True
         if (
             removed and len(text.split()) < 2 and not STOP_WORDS.match(text)
         ):  # leftover echo noise, except "stop"
             return "", True
         return text, removed
+
+    def note_command(self, cmd: str) -> None:
+        self.last_cmd = _norm(cmd)
+        self.last_cmd_at = time.monotonic()
+
+    def is_repeat(self, text: str) -> bool:
+        """The same command again within REPEAT_S, without the wake word, is an echo of Rocky's reply."""
+        return (
+            bool(self.last_cmd)
+            and _norm(text) == self.last_cmd
+            and time.monotonic() - self.last_cmd_at < self.REPEAT_S
+        )
 
     def open_follow_up(self) -> None:
         self.follow_up_until = time.monotonic() + self.FOLLOW_UP_S
@@ -640,9 +660,15 @@ def listen_forever(
                 print("  (ignored: no wake word)")
                 events.emit("idle")
                 continue
+            if not (addressed or forced or stop) and gate.is_repeat(cmd or text):
+                print("  (ignored: same command again without the wake word; say the name to repeat it)")
+                history.record("ignored_repeat", text=raw)
+                events.emit("idle")
+                continue
             events.emit("thinking")
             try:
                 on_utterance("stop" if stop else (cmd or text))
+                gate.note_command(cmd or text)
                 gate.open_follow_up()  # a short window where the next sentence needs no wake word
             finally:
                 events.emit("idle")
