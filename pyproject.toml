@@ -21,6 +21,7 @@ dependencies = [
 
 [project.scripts]
 rocky = "rocky.cli:main"
+rocky-app = "rocky.app:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]

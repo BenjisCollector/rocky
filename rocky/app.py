@@ -342,6 +342,8 @@ if sys.platform == "darwin":
                 y += 28
             self.rows[0][0].setStringValue_("Nothing yet.")
             self.rows[0][0].setTextColor_(tertiary)
+            self.rows[0][1].setStringValue_(f"Try: {config.WAKE_WORD}, open Safari")
+            self.rows[0][1].setTextColor_(tertiary)
 
             # (d) screen tasks
             y += 12
@@ -526,6 +528,7 @@ if sys.platform == "darwin":
                 utter.setStringValue_(u)
                 utter.setTextColor_(NSColor.labelColor())
                 plan.setStringValue_(ln)
+                plan.setTextColor_(NSColor.secondaryLabelColor())
             if line == "failed":
                 self.showError(reply)
             else:
