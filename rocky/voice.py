@@ -516,26 +516,30 @@ def listen_forever(
     )
     events.emit("idle")
 
-    def capture() -> None:
-        with Microphone(device) as mic:
-            while True:
-                frame = mic.frame(timeout=0.5)
-                if frame is None:
-                    continue
-                if holding.is_set():
-                    held: list[np.ndarray] = [frame]
-                    while holding.is_set():
-                        f = mic.frame(timeout=0.1)
-                        if f is not None:
-                            held.append(f)
-                    utterances.put((np.concatenate(held), True))
-                    mic.drain()
-                    continue
-                pcm = endpointer.feed(frame)
-                if pcm is not None:
-                    utterances.put((pcm, False))
+    def capture(mic: Microphone) -> None:
+        while True:
+            frame = mic.frame(timeout=0.5)
+            if frame is None:
+                continue
+            if holding.is_set():
+                held: list[np.ndarray] = [frame]
+                while holding.is_set():
+                    f = mic.frame(timeout=0.1)
+                    if f is not None:
+                        held.append(f)
+                utterances.put((np.concatenate(held), True))
+                mic.drain()
+                continue
+            pcm = endpointer.feed(frame)
+            if pcm is not None:
+                utterances.put((pcm, False))
 
-    threading.Thread(target=capture, daemon=True, name="rocky-mic").start()
+    try:
+        mic = Microphone(device).__enter__()  # opened here so a denied microphone raises in the caller
+    except Exception:
+        stt.stop()
+        raise
+    threading.Thread(target=capture, args=(mic,), daemon=True, name="rocky-mic").start()
     try:
         while True:
             pcm, forced = utterances.get()
@@ -562,6 +566,7 @@ def listen_forever(
     except KeyboardInterrupt:
         pass
     finally:
+        mic.__exit__(None, None, None)
         stt.stop()
 
 
