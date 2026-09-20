@@ -16,6 +16,7 @@ dependencies = [
     "pyobjc-framework-AVFoundation>=10; sys_platform == 'darwin'",
     "uiautomation>=2.0; sys_platform == 'win32'",
     "pywin32>=306; sys_platform == 'win32'",
+    "pynput>=1.7; sys_platform == 'win32'",
 ]
 
 [project.scripts]
