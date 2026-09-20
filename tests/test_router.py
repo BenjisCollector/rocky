@@ -25,7 +25,7 @@ def test_one_request_with_the_full_fan_out_and_state():
     route(jev, Fake(), "open notes")
     assert len(jev.calls) == 1
     state, questions = jev.calls[0]
-    assert set(state) == {"utterance", "frontmost_app", "apps", "candidates"}
+    assert set(state) == {"utterance", "frontmost_app", "apps", "candidates", "recent_commands"}
     assert state["frontmost_app"] == "Finder" and "Notes" in state["apps"]
     expected = {
         "kind", "addressed", "compound", "needs_screen", "app", "site", "engine", "shortcut",
