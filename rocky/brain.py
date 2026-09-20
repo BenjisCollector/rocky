@@ -69,7 +69,10 @@ def act(
             ]
             return _say(platform, " ".join(r for r in replies if r), speak), line
 
-    if plan.tier == "goal" and depth == 0:
+    from . import config
+
+    unsure = plan.kind == "none" or plan.confidence < config.ACTION_MIN_CONFIDENCE
+    if (plan.tier == "goal" or unsure) and depth == 0:
         from .planner import decompose
 
         steps = decompose(utterance, platform.frontmost_app())
@@ -91,6 +94,9 @@ def act(
         reply = execute(plan, platform, do, jev=jev, prompt_fn=prompt_fn)
         history.record("executed", utterance=utterance, kind=plan.kind, reply=reply, act=do, depth=depth)
         if did_something(plan, reply):
+            from .router import remember
+
+            remember(utterance, plan.kind, plan.args)
             with contextlib.suppress(Exception):
                 platform.beep()
         events.emit("done" if plan.kind not in ("none", "fun") else "idle")
@@ -113,7 +119,7 @@ def did_something(plan: Plan, reply: str) -> bool:
 
 def _say(platform: Any, reply: str, speak: bool) -> str:
     if reply and speak:
-        events.emit("speaking")
+        events.emit("said:" + reply)
         with contextlib.suppress(Exception):  # no voice is better than no action
             platform.speak(reply)
     return reply

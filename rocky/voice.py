@@ -115,6 +115,62 @@ class VADConfig:
     calibrate_ms: int = 600  # the first frames are taken as room noise, never as speech
 
 
+STOP_WORDS = re.compile(r"^(?:\W*(?:stop|enough|quiet|silence|cancel|shut up|pause)\W*)+$", re.IGNORECASE)
+
+
+class Gate:
+    """Keeps Rocky from hearing itself, without going deaf: the user may talk over it.
+
+    scrub(): removes Rocky's own recent sentences from a transcript and returns what the user said.
+    follow_up: after a real command, the next sentence within FOLLOW_UP_S needs no wake word.
+    """
+
+    FOLLOW_UP_S = 8.0
+    REMEMBER_S = 25.0
+
+    def __init__(self) -> None:
+        self.said: list[tuple[float, str]] = []
+        self.follow_up_until = 0.0
+
+    def on_event(self, state: str) -> None:
+        if state.startswith("said:"):
+            self.said.append((time.monotonic(), _norm(state[5:])))
+            self.said = self.said[-4:]
+
+    def scrub(self, heard: str) -> tuple[str, bool]:
+        """(what the user said, was_anything_removed). A transcript that is only Rocky's echo comes back empty;
+        the user's words survive even when Rocky's sentence sits inside the same transcript."""
+        text = _norm(heard)
+        removed = False
+        now = time.monotonic()
+        for ts, said in self.said:
+            if now - ts > self.REMEMBER_S or not said or not text:
+                continue
+            if said in text:
+                text = " ".join(text.replace(said, " ").split())
+                removed = True
+                continue
+            m = difflib.SequenceMatcher(None, text, said).find_longest_match(0, len(text), 0, len(said))
+            if m.size >= max(10, int(0.6 * len(said))):  # a long run of Rocky's words inside the transcript
+                text = " ".join((text[: m.a] + " " + text[m.a + m.size :]).split())
+                removed = True
+        if (
+            removed and len(text.split()) < 2 and not STOP_WORDS.match(text)
+        ):  # leftover echo noise, except "stop"
+            return "", True
+        return text, removed
+
+    def open_follow_up(self) -> None:
+        self.follow_up_until = time.monotonic() + self.FOLLOW_UP_S
+
+    def follow_up_open(self) -> bool:
+        return time.monotonic() < self.follow_up_until
+
+
+def _norm(text: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9\u0600-\u06ff ]", " ", text.lower()).split())
+
+
 class Endpointer:
     """Energy-based voice activity detection over 30 ms float32 frames. Pure: feed frames, get utterances.
     ponytail: RMS over an adaptive noise floor; swap in Silero VAD if music or fans keep tripping it."""
@@ -499,6 +555,8 @@ def listen_forever(
     utterances: queue.Queue[tuple[np.ndarray, bool]] = queue.Queue()
     holding = threading.Event()
     endpointer = Endpointer(on_speech_start=lambda: events.emit("hearing"))
+    gate = Gate()
+    events.subscribe(gate.on_event)
 
     def on_press() -> None:
         endpointer.reset()
@@ -554,14 +612,38 @@ def listen_forever(
                 events.emit("idle")
                 continue
             _report(text, pcm, stt_ms)
-            addressed, cmd = strip_wake(text, wake_word) if wake_word else (False, text)
-            history.record("heard", text=text, addressed=addressed, forced=forced, stt_ms=stt_ms)
+            raw = text
+            text, scrubbed = gate.scrub(text)
+            addressed, cmd = strip_wake(text, wake_word) if (wake_word and text) else (False, text)
+            stop = bool(STOP_WORDS.match(text or raw))
+            follow_up = gate.follow_up_open()
+            history.record(
+                "heard",
+                text=raw,
+                kept=text,
+                addressed=addressed,
+                forced=forced,
+                echo=scrubbed,
+                follow_up=follow_up,
+                stop=stop,
+                stt_ms=stt_ms,
+            )
+            if not text and not stop:
+                print("  (ignored: that was my own voice)")
+                events.emit("idle")
+                continue
             if addressed and not cmd and not forced:  # just the name: the next utterance is the command
+                gate.open_follow_up()
+                events.emit("idle")
+                continue
+            if not (addressed or forced or follow_up or stop):
+                print("  (ignored: no wake word)")
                 events.emit("idle")
                 continue
             events.emit("thinking")
             try:
-                on_utterance(cmd or text)
+                on_utterance("stop" if stop else (cmd or text))
+                gate.open_follow_up()  # a short window where the next sentence needs no wake word
             finally:
                 events.emit("idle")
     except KeyboardInterrupt:

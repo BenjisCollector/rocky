@@ -15,6 +15,7 @@ import contextlib
 import os
 import subprocess
 import tempfile
+import threading
 import time
 import webbrowser
 from pathlib import Path
@@ -381,11 +382,19 @@ class Windows:
             "Add-Type -AssemblyName System.Speech; "
             f"(New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak('{safe}')"
         )
-        subprocess.Popen(
-            ["powershell", "-NoProfile", "-Command", script],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        from .. import events
+
+        def _run() -> None:
+            events.emit("speaking")
+            subprocess.run(
+                ["powershell", "-NoProfile", "-Command", script],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            events.emit("spoke")
+
+        threading.Thread(target=_run, daemon=True, name="rocky-say").start()
 
     def focused_role(self) -> str:
         """ControlTypeName of the focused control, with "Password" appended when UIA marks it as one."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 from typing import Any
 from urllib.parse import quote_plus
@@ -55,6 +56,14 @@ def execute(
             return f"I could not pick a video, so here are the results for {a['query']}."
         platform.open_url(url)
         return f"Playing {a['query']}."
+    if kind == "stop":
+        from . import events
+
+        events.emit("idle")
+        with contextlib.suppress(Exception):
+            platform.speak("")  # cuts any speech in progress
+        platform.media("play_pause")  # pauses the video or track that is playing
+        return "Stopped."
     if kind == "fun":
         from . import events
 

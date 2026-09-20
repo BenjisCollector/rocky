@@ -4,6 +4,7 @@ from the utterance in code and offered as candidates; Jev selects, it never gene
 from __future__ import annotations
 
 import re
+from collections import deque
 from typing import Any
 
 from .jev import Jev, noul, validate_choice
@@ -16,6 +17,7 @@ KINDS: dict[str, str] = {
     "search": "Search the web or a site for something: google it, look it up, search youtube for",
     "play": "Play a specific video, song, or artist by name ('play lofi beats', 'play the Hormozi interview on youtube')",
     "fun": "Ask Rocky itself to do something playful: dance, wave, say hi, celebrate",
+    "stop": "Stop, cancel, quiet, enough, shut up, pause whatever is happening right now",
     "shortcut": "Press one key or keyboard shortcut: copy, paste, undo, save, close the window",
     "scroll": "Scroll the current page or document up or down",
     "volume": "Change the system volume: louder, quieter, mute, unmute",
@@ -43,6 +45,7 @@ NO_SCREEN_KINDS = frozenset(
         "media",
         "system",
         "none",
+        "stop",
     }
 )
 
@@ -248,6 +251,13 @@ def build_questions(
 # --- route ---------------------------------------------------------------------------------------
 
 
+RECENT: deque[dict[str, Any]] = deque(maxlen=4)
+
+
+def remember(utterance: str, kind: str, args: dict[str, Any]) -> None:
+    RECENT.append({"utterance": utterance, "kind": kind, **{k: v for k, v in args.items() if k != "goal"}})
+
+
 def route(jev: Jev, platform: Platform, utterance: str) -> Plan:
     apps = platform.installed_apps()
     shortcuts = list(platform.shortcuts())
@@ -258,6 +268,9 @@ def route(jev: Jev, platform: Platform, utterance: str) -> Plan:
     state = {
         "utterance": utterance,
         "frontmost_app": front,
+        "recent_commands": list(
+            RECENT
+        ),  # what the user asked for just before; helps "again", "louder", "next one"
         "apps": apps,
         "candidates": cands,
     }

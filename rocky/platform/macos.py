@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import subprocess
 import tempfile
+import threading
 import time
 from collections import deque
 from pathlib import Path
@@ -517,10 +518,20 @@ class MacOS:
 
     def speak(self, text: str) -> None:
         """System voice, in the background, one utterance at a time (a new one cuts the previous)."""
+        from .. import events
+
+        subprocess.run(["pkill", "-x", "say"], capture_output=True, check=False)
         if not text:
             return
-        subprocess.run(["pkill", "-x", "say"], capture_output=True, check=False)
-        subprocess.Popen(["say", "-r", "195", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        def _run() -> None:
+            events.emit("speaking")
+            subprocess.run(
+                ["say", "-r", "195", text], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False
+            )
+            events.emit("spoke")
+
+        threading.Thread(target=_run, daemon=True, name="rocky-say").start()
 
     def focused_role(self) -> str:
         """Role of the focused element in the frontmost app. Secure fields are never listed by snapshot(),
