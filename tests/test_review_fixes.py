@@ -59,3 +59,18 @@ def test_h4_press_enter_with_destructive_default_button_needs_confirmation(butto
         risk.classify(Decision(kind="press_enter", confidence=0.9, raw={"buttons": "OK | Next"}))
         == "reversible"
     )
+
+
+def test_type_with_nothing_to_type_asks_instead_of_typing_the_verb(monkeypatch):
+    from rocky import brain
+    from rocky.models import Plan
+
+    platform = Fake()
+    monkeypatch.setattr(
+        "rocky.router.route", lambda jev, p, u: Plan(kind="type", args={"text": "type"}, confidence=0.95)
+    )
+    monkeypatch.setattr("rocky.planner.decompose", lambda *a, **k: [])
+    reply, _ = brain.act("open notes and type", None, platform, True, speak=False)
+    assert reply == "Type what?" and not [c for c in platform.calls if c[0] == "type_text"]
+    reply, line = brain.act("milk eggs bread", None, platform, True, speak=False)
+    assert line == "type(pending)" and ("type_text", "milk eggs bread") in platform.calls

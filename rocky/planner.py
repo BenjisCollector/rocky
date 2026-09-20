@@ -15,24 +15,29 @@ import httpx
 from . import config
 
 HTTP = httpx.Client(timeout=20.0)
-MAX_STEPS = 5
+MAX_STEPS = 6
 
-SYSTEM = """You convert one spoken request into a short list of simple commands a computer assistant already understands.
-Known command shapes (use these words):
-- open <app name>                    - go to <site or domain>
-- search youtube for <query>         - google <query>
-- play <video, song or artist>       - type <text>
-- press <copy|paste|undo|save|find|new tab|close tab|close window|select all|go back|reload|zoom in|zoom out>
-- scroll down / scroll up            - volume up / volume down / mute / unmute
-- pause / next track / previous track
-- dark mode / lock the screen / take a screenshot
-- on screen: <one sentence describing something that needs clicking inside the current app>
-Rules: at most 5 steps, each one command, in order. Prefer 'play X' over searching when the user wants to watch or listen.
-If the request is chatter or impossible, return an empty list. Never include passwords or payments.
+SYSTEM = """You turn one spoken request into a short list of simple commands a computer assistant already understands.
+You will be given the frontmost app, the installed apps, the available keyboard shortcut names, and the last few commands.
+Command shapes (use exactly these words):
+- open <installed app name>            - go to <site or domain>
+- search youtube for <query>           - google <query>
+- play <video, song or artist>         - type <the exact text to type>
+- press <one shortcut name from the list>   (for a new note, file, document, tab or window use: press new / press new_tab)
+- scroll down / scroll up              - volume up / volume down / mute / unmute
+- pause / next track / previous track  - dark mode / lock the screen / take a screenshot
+- on screen: <one sentence for something that must be clicked inside the current app>
+Rules: at most 6 steps, in order, each one command. Keep the user's exact words for anything typed.
+If a needed app is not the frontmost app, open it first. Prefer 'play X' when the user wants to watch or listen.
+If the request is chatter, a question, or impossible, return an empty list. Never include passwords or payments.
+Examples:
+"open notes and create a new note called groceries" -> ["open Notes", "press new", "type groceries"]
+"put on some lofi and turn it down a bit" -> ["play lofi hip hop", "volume down"]
+"reply to this email saying I will be late" -> ["on screen: click Reply", "type I will be late"]
 Reply ONLY with JSON: {"steps": ["...", "..."]}"""
 
 
-def decompose(utterance: str, front_app: str = "") -> list[str]:
+def decompose(utterance: str, front_app: str = "", context: dict[str, Any] | None = None) -> list[str]:
     """Known commands for `utterance`, or [] when the LLM is unavailable or unsure."""
     key = config.TEXT_MODEL_API_KEY
     if not key:
@@ -45,7 +50,10 @@ def decompose(utterance: str, front_app: str = "") -> list[str]:
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": SYSTEM},
-            {"role": "user", "content": json.dumps({"request": utterance, "frontmost_app": front_app})},
+            {
+                "role": "user",
+                "content": json.dumps({"request": utterance, "frontmost_app": front_app, **(context or {})}),
+            },
         ],
     }
     if "api.deepseek.com" in base:

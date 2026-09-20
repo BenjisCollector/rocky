@@ -33,7 +33,19 @@ def act(
     """Handle one utterance end to end. Returns (spoken reply, plan line). `do` drives screen tasks."""
     from .fast import execute
     from .jev import JevError
-    from .router import route, split_compound
+    from .router import route
+
+    if depth == 0 and PENDING.pop("type", False):  # the answer to "Type what?" is typed verbatim
+        from .fast import _type
+
+        reply = _type(utterance, platform)
+        history.record(
+            "executed", utterance=utterance, kind="type", reply=reply, act=do, depth=0, pending=True
+        )
+        if not reply.lower().startswith(REFUSALS):
+            with contextlib.suppress(Exception):
+                platform.beep()
+        return _say(platform, reply, speak), "type(pending)"
 
     try:
         plan = route(jev, platform, utterance)
@@ -59,23 +71,19 @@ def act(
     if dry:
         return "", line
 
-    if plan.compound and depth == 0 and plan.kind != "play":  # "find X and play it" is one play request
-        parts = split_compound(utterance)
-        if len(parts) > 1:
-            log(f"  compound: {parts}")
-            replies = [
-                act(p, jev, platform, do, prompt_fn=prompt_fn, log=log, speak=False, depth=1)[0]
-                for p in parts
-            ]
-            return _say(platform, " ".join(r for r in replies if r), speak), line
-
     from . import config
 
     unsure = plan.kind == "none" or plan.confidence < config.ACTION_MIN_CONFIDENCE
-    if (plan.tier == "goal" or unsure) and depth == 0:
+    if depth == 0 and (plan.compound or plan.tier == "goal" or unsure) and plan.kind != "play":
         from .planner import decompose
+        from .router import RECENT
 
-        steps = decompose(utterance, platform.frontmost_app())
+        context = {
+            "installed_apps": platform.installed_apps()[:80],
+            "shortcut_names": sorted(platform.shortcuts()),
+            "recent_commands": list(RECENT),
+        }
+        steps = decompose(utterance, platform.frontmost_app(), context)
         history.record("planner", utterance=utterance, steps=steps)
         if steps:
             log(f"  plan: {steps}")
@@ -86,9 +94,24 @@ def act(
                     goal or step, jev, platform, do, prompt_fn=prompt_fn, log=log, speak=False, depth=1
                 )
                 replies.append(r)
-                if r.lower().startswith(("that failed", "focus moved", "i never")):
+                if r.lower().startswith(REFUSALS):
                     break
             return _say(platform, " ".join(r for r in replies if r), speak), line
+        if plan.compound:
+            from .router import split_compound
+
+            parts = split_compound(utterance)
+            if len(parts) > 1:
+                log(f"  compound: {parts}")
+                replies = [
+                    act(p, jev, platform, do, prompt_fn=prompt_fn, log=log, speak=False, depth=1)[0]
+                    for p in parts
+                ]
+                return _say(platform, " ".join(r for r in replies if r), speak), line
+
+    if plan.kind == "type" and _degenerate(plan.args.get("text", "")):
+        PENDING["type"] = True
+        return _say(platform, "Type what?", speak), line
 
     try:
         reply = execute(plan, platform, do, jev=jev, prompt_fn=prompt_fn)
@@ -107,7 +130,15 @@ def act(
     return _say(platform, reply, speak), line
 
 
-REFUSALS = ("not sure", "i never", "focus moved", "that failed", "i don't know", "i could not")
+REFUSALS = ("not sure", "i never", "focus moved", "that failed", "i don't know", "i could not", "type what")
+PENDING: dict[str, bool] = {}
+_VERBS = frozenset({"type", "write", "enter", "dictate", "say", "input", "insert"})
+
+
+def _degenerate(text: str) -> bool:
+    """'type' with nothing to type, or a lone verb: the sentence was cut off."""
+    words = text.lower().split()
+    return not words or (len(words) == 1 and words[0] in _VERBS)
 
 
 def did_something(plan: Plan, reply: str) -> bool:

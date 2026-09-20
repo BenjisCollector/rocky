@@ -94,12 +94,12 @@ def test_goal_tier_hands_off_to_run_goal(monkeypatch):
     monkeypatch.setitem(sys.modules, "rocky.loop", types.SimpleNamespace(run_goal=run_goal))
     fake = Fake()
     p = plan("goal", goal="reply to the last email")
-    assert execute(p, fake, act=True, jev="J") == "Done after 3 steps."
+    assert execute(p, fake, act=True, jev="J") == "Done (3 steps)."
     assert seen == {"platform": fake, "jev": "J", "goal": "reply to the last email", "act": True}
     typed = Plan(
         kind="type", args={"text": "hi", "goal": "type hi in the subject"}, confidence=0.9, needs_screen=True
     )
-    assert execute(typed, fake, act=False, jev="J") == "Done after 3 steps."
+    assert execute(typed, fake, act=False, jev="J") == "Done (3 steps)."
     assert seen["goal"] == "type hi in the subject" and seen["act"] is False
 
 

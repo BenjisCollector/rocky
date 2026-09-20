@@ -109,6 +109,17 @@ def _type(text: str, platform: Platform) -> str:
     return "Done."
 
 
+OUTCOME_WORDS = {
+    "done": "Done",
+    "nothing helps": "I could not find anything on screen for that",
+    "low confidence": "I was not sure enough to click anything",
+    "stalled": "I clicked but nothing changed",
+    "step limit": "I ran out of steps",
+    "dry run": "Dry run, nothing clicked. Switch screen tasks to Do it",
+    "needs confirmation": "That needs a yes from you",
+}
+
+
 def _goal(plan: Plan, platform: Platform, act: bool, jev: Any) -> str:
     from .loop import run_goal  # lazy: the loop is a separate module with its own dependencies
 
@@ -118,4 +129,6 @@ def _goal(plan: Plan, platform: Platform, act: bool, jev: Any) -> str:
         jev = Jev()
     state = run_goal(platform, jev, plan.args["goal"], act, print)
     n = len(state.steps)
-    return f"{state.outcome.capitalize()} after {n} step{'s' if n != 1 else ''}."
+    return (
+        OUTCOME_WORDS.get(state.outcome, state.outcome.capitalize()) + f" ({n} step{'s' if n != 1 else ''})."
+    )
