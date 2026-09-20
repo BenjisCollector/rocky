@@ -67,7 +67,12 @@ class Fake:
         return Path(path or "fake.png")
 
     def shortcuts(self):
-        return {"copy": ("c", ["cmd"]), "paste": ("v", ["cmd"]), "undo": ("z", ["cmd"]), "close_window": ("w", ["cmd"])}
+        return {
+            "copy": ("c", ["cmd"]),
+            "paste": ("v", ["cmd"]),
+            "undo": ("z", ["cmd"]),
+            "close_window": ("w", ["cmd"]),
+        }
 
     def check_permissions(self):
         return {"accessibility": True, "microphone": True, "input_monitoring": True}

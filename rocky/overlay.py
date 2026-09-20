@@ -96,7 +96,7 @@ if sys.platform == "darwin":
 
     class RockyView(NSView):
         def initWithFrame_(self, frame):
-            self = objc.super(RockyView, self).initWithFrame_(frame)  # noqa: PLW0642
+            self = objc.super(RockyView, self).initWithFrame_(frame)
             if self is None:
                 return None
             self.state = "idle"
@@ -250,7 +250,7 @@ if sys.platform == "darwin":
 
     class _Ticker(NSObject):
         def initWithView_(self, view):
-            self = objc.super(_Ticker, self).init()  # noqa: PLW0642
+            self = objc.super(_Ticker, self).init()
             self.view = view
             return self
 

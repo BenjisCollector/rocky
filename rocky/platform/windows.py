@@ -398,7 +398,7 @@ class Windows:
                 if control.IsOffscreen:
                     continue
                 r = control.BoundingRectangle
-            except Exception:  # noqa: BLE001, S112  comtypes raises COMError when an element vanishes
+            except Exception:  # noqa: BLE001  comtypes raises COMError when an element vanishes
                 continue
             x0, y0 = max(r.left, sx0), max(r.top, sy0)
             x1, y1 = min(r.right, sx1), min(r.bottom, sy1)
